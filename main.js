@@ -1,6 +1,7 @@
 const axios = require('axios');
 const fs = require('fs');
 const TelegramBot = require('node-telegram-bot-api');
+const ora = require('ora'); // Import module untuk animasi loading
 
 // Token bot Telegram Anda
 const token = '7190883171:AAH-9Fu-EnOInHjit7H5_jfahn2dBK4nHYY'; // Ganti dengan token bot Anda
@@ -42,6 +43,9 @@ bot.onText(/\/tt (.+)/, async (msg, match) => {
     const chatId = msg.chat.id;
     const url = match[1]; // Ambil URL dari pesan
 
+    // Mulai animasi loading
+    const loading = ora('Mengunduh video...').start();
+
     // Payload untuk mengambil data TikWM
     const payloadUrl = {
         url: url,
@@ -51,47 +55,56 @@ bot.onText(/\/tt (.+)/, async (msg, match) => {
         hd: 1
     };
 
-    // Mendapatkan data dari API TikWM
-    const response = await dapatkanDataTikWM(payloadUrl);
+    try {
+        // Mendapatkan data dari API TikWM
+        const response = await dapatkanDataTikWM(payloadUrl);
 
-    // Cari dan tampilkan nilai hdplay jika ada dalam objek data
-    if (response && response.data && response.data.hdplay) {
-        // Mengunduh video jika ada pesan hdplay
-        const videoUrl = `https://tikwm.com${response.data.hdplay}`;
-        const outputPath = `./src/video_${Date.now()}.mp4`; // Path untuk menyimpan video
+        // Cari dan tampilkan nilai hdplay jika ada dalam objek data
+        if (response && response.data && response.data.hdplay) {
+            // Mengunduh video jika ada pesan hdplay
+            const videoUrl = `https://tikwm.com${response.data.hdplay}`;
+            const outputPath = `./src/video_${Date.now()}.mp4`; // Path untuk menyimpan video
 
-        axios({
-            url: videoUrl,
-            method: 'GET',
-            responseType: 'stream'
-        }).then(response => {
-            // Simpan video ke file
-            const writer = fs.createWriteStream(outputPath);
-            response.data.pipe(writer);
-            
-            writer.on('finish', () => {
-                console.log('Video berhasil diunduh dan disimpan di', outputPath);
-                // Kirim video ke pengguna dengan ukuran asli
-                bot.sendVideo(chatId, fs.createReadStream(outputPath)).then(() => {
-                    // Hapus video dari server setelah berhasil dikirimkan
-                    fs.unlink(outputPath, (error) => {
-                        if (error) {
-                            console.error('Gagal menghapus video:', error);
-                        } else {
-                            console.log('Video berhasil dihapus dari server.');
-                        }
+            axios({
+                url: videoUrl,
+                method: 'GET',
+                responseType: 'stream'
+            }).then(response => {
+                // Simpan video ke file
+                const writer = fs.createWriteStream(outputPath);
+                response.data.pipe(writer);
+                
+                writer.on('finish', () => {
+                    console.log('Video berhasil diunduh dan disimpan di', outputPath);
+                    // Hentikan animasi loading
+                    loading.succeed('Video berhasil diunduh.');
+
+                    // Kirim video ke pengguna dengan ukuran asli
+                    bot.sendVideo(chatId, fs.createReadStream(outputPath)).then(() => {
+                        // Hapus video dari server setelah berhasil dikirimkan
+                        fs.unlink(outputPath, (error) => {
+                            if (error) {
+                                console.error('Gagal menghapus video:', error);
+                            } else {
+                                console.log('Video berhasil dihapus dari server.');
+                            }
+                        });
+                    }).catch(error => {
+                        console.error('Gagal mengirim video:', error);
                     });
-                }).catch(error => {
-                    console.error('Gagal mengirim video:', error);
                 });
+            }).catch(error => {
+                console.error('Gagal mengunduh video:', error);
+                bot.sendMessage(chatId, 'Gagal mengunduh video.');
             });
-        }).catch(error => {
-            console.error('Gagal mengunduh video:', error);
-            bot.sendMessage(chatId, 'Gagal mengunduh video.');
-        });
-        
-    } else {
-        bot.sendMessage(chatId, 'Tidak ada pesan hdplay yang ditemukan.');
+            
+        } else {
+            // Hentikan animasi loading jika tidak ada pesan hdplay
+            loading.fail('Tidak ada pesan hdplay yang ditemukan.');
+        }
+    } catch (error) {
+        console.error('Gagal mendapatkan data dari API TikWM:', error);
+        bot.sendMessage(chatId, 'Gagal mendapatkan data dari API TikWM.');
     }
 });
 
