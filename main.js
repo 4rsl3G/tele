@@ -1,7 +1,5 @@
 const axios = require('axios');
-const fs = require('fs');
 const TelegramBot = require('node-telegram-bot-api');
-const { terminal } = require('terminal-kit');
 
 // Token bot Telegram Anda
 const token = '7190883171:AAH-9Fu-EnOInHjit7H5_jfahn2dBK4nHYY'; // Ganti dengan token bot Anda
@@ -17,45 +15,25 @@ async function dapatkanDataTikWM(payloadUrl) {
         return response.data;
     } catch (error) {
         console.error('Gagal mendapatkan data dari API TikWM:', error);
+        throw error;
     }
 }
-
-// Event listener untuk perintah /start
-bot.onText(/\/start/, (msg) => {
-    const chatId = msg.chat.id;
-    const pesan = `
-Selamat datang di Bot JTikBot!
-
-Untuk menggunakan bot ini, cukup kirimkan URL dari video TikTok yang ingin Anda unduh. Bot akan mengunduh video tersebut dan mengirimkannya kepada Anda.
-
-Contoh penggunaan:
-/tt <link vidio tiktok>
-
-Bot ini dibuat oleh Jhody. Kunjungi website kami di [Tukukripto](https://tukukripto.my.id/) untuk informasi lebih lanjut.
-
-Terima kasih telah menggunakan bot ini!`;
-    
-    bot.sendMessage(chatId, pesan, { parse_mode: 'Markdown' });
-});
 
 // Event listener untuk perintah /tt
 bot.onText(/\/tt (.+)/, async (msg, match) => {
     const chatId = msg.chat.id;
     const url = match[1]; // Ambil URL dari pesan
 
-    // Mulai animasi loading
-    const loader = terminal.loading('Mengunduh video...');
-
-    // Payload untuk mengambil data TikWM
-    const payloadUrl = {
-        url: url,
-        count: 12,
-        cursor: 0,
-        web: 1,
-        hd: 1
-    };
-
     try {
+        // Payload untuk mengambil data TikWM
+        const payloadUrl = {
+            url: url,
+            count: 12,
+            cursor: 0,
+            web: 1,
+            hd: 1
+        };
+
         // Mendapatkan data dari API TikWM
         const response = await dapatkanDataTikWM(payloadUrl);
 
@@ -63,50 +41,20 @@ bot.onText(/\/tt (.+)/, async (msg, match) => {
         if (response && response.data && response.data.hdplay) {
             // Mengunduh video jika ada pesan hdplay
             const videoUrl = `https://tikwm.com${response.data.hdplay}`;
-            const outputPath = `./src/video_${Date.now()}.mp4`; // Path untuk menyimpan video
 
-            axios({
-                url: videoUrl,
-                method: 'GET',
-                responseType: 'stream'
-            }).then(response => {
-                // Simpan video ke file
-                const writer = fs.createWriteStream(outputPath);
-                response.data.pipe(writer);
-                
-                writer.on('finish', () => {
-                    console.log('Video berhasil diunduh dan disimpan di', outputPath);
-                    // Hentikan animasi loading
-                    loader.stop();
-                    console.log('Video berhasil diunduh.');
-
-                    // Kirim video ke pengguna dengan ukuran asli
-                    bot.sendVideo(chatId, fs.createReadStream(outputPath)).then(() => {
-                        // Hapus video dari server setelah berhasil dikirimkan
-                        fs.unlink(outputPath, (error) => {
-                            if (error) {
-                                console.error('Gagal menghapus video:', error);
-                            } else {
-                                console.log('Video berhasil dihapus dari server.');
-                            }
-                        });
-                    }).catch(error => {
-                        console.error('Gagal mengirim video:', error);
-                    });
-                });
+            // Kirim video ke pengguna dengan ukuran asli
+            bot.sendVideo(chatId, videoUrl).then(() => {
+                console.log('Video berhasil dikirim.');
             }).catch(error => {
-                console.error('Gagal mengunduh video:', error);
-                bot.sendMessage(chatId, 'Gagal mengunduh video.');
+                console.error('Gagal mengirim video:', error);
+                bot.sendMessage(chatId, 'Gagal mengirim video.');
             });
-            
         } else {
-            // Hentikan animasi loading jika tidak ada pesan hdplay
-            loader.stop();
             console.log('Tidak ada pesan hdplay yang ditemukan.');
         }
     } catch (error) {
-        console.error('Gagal mendapatkan data dari API TikWM:', error);
-        bot.sendMessage(chatId, 'Gagal mendapatkan data dari API TikWM.');
+        console.error('Gagal melakukan operasi:', error);
+        bot.sendMessage(chatId, 'Terjadi kesalahan dalam melakukan operasi.');
     }
 });
 
