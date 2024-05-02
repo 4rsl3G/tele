@@ -1,4 +1,4 @@
-const fetch = require('node-fetch');
+const axios = require('axios');
 const TelegramBot = require('node-telegram-bot-api');
 
 // Token bot Telegram Anda
@@ -7,46 +7,32 @@ const token = '7190883171:AAH-9Fu-EnOInHjit7H5_jfahn2dBK4nHYY'; // Ganti dengan 
 // Inisialisasi bot
 const bot = new TelegramBot(token, { polling: true });
 
-// Fungsi untuk mendapatkan data dari API TikWM
-async function dapatkanDataTikWM(url) {
-    try {
-        const response = await fetch(`https://tikwm.com/api/?url=${encodeURIComponent(url)}&count=12&cursor=0&web=1&hd=1`);
-        if (!response.ok) {
-            throw new Error('Gagal mendapatkan data dari API TikWM');
-        }
-        return await response.json();
-    } catch (error) {
-        console.error('Gagal mendapatkan data dari API TikWM:', error);
-        throw error;
-    }
-}
-
 // Event listener untuk perintah /tt
 bot.onText(/\/tt (.+)/, async (msg, match) => {
     const chatId = msg.chat.id;
     const url = match[1]; // Ambil URL dari pesan
 
     try {
-        // Mendapatkan data dari API TikWM
-        const response = await dapatkanDataTikWM(url);
+        // Mengambil data dari API TikWM
+        const response = await axios.get(`https://tikwm.com/api/?url=${encodeURIComponent(url)}&count=12&cursor=0&web=1&hd=1`);
 
-        // Cari dan tampilkan nilai hdplay jika ada dalam objek data
-        if (response && response.data && response.data.hdplay) {
-            // Mengirimkan video jika ada pesan hdplay
-            const videoUrl = `https://tikwm.com${response.data.hdplay}`;
-
-            // Kirim video ke pengguna dengan ukuran asli
-            bot.sendVideo(chatId, videoUrl).then(() => {
-                console.log('Video berhasil dikirim.');
-            }).catch(error => {
-                console.error('Gagal mengirim video:', error);
-                bot.sendMessage(chatId, 'Gagal mengirim video.');
-            });
-        } else {
-            console.log('Tidak ada pesan hdplay yang ditemukan.');
+        // Pastikan respons dari API TikWM adalah berhasil
+        if (response.status !== 200 || !response.data || !response.data.data || !response.data.data.hdplay) {
+            throw new Error('Gagal mendapatkan data video dari API TikWM');
         }
+
+        // Ambil URL video dari respons
+        const videoUrl = `https://tikwm.com${response.data.data.hdplay}`;
+
+        // Kirim video ke pengguna dengan ukuran asli
+        bot.sendVideo(chatId, videoUrl).then(() => {
+            console.log('Video berhasil dikirim.');
+        }).catch(error => {
+            console.error('Gagal mengirim video:', error);
+            bot.sendMessage(chatId, 'Gagal mengirim video.');
+        });
     } catch (error) {
-        console.error('Gagal melakukan operasi:', error);
+        console.error('Terjadi kesalahan:', error.message);
         bot.sendMessage(chatId, 'Terjadi kesalahan dalam melakukan operasi.');
     }
 });
